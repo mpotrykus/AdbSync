@@ -39,6 +39,22 @@ scp -q "$ROOT/tools/pi/Dockerfile.deploy" "$HOST:adbsync-fast/Dockerfile"
 echo "== build image on $HOST"
 ssh "$HOST" "cd ~/adbsync-fast && docker build -q -t adbsync-server:latest -t adbsync-server:$TAG ."
 
+echo "== prune old images on $HOST"
+ssh "$HOST" 'bash -s' <<'PRUNE'
+protected=" latest base base-noaapt rollback-theme-only "
+running="$(docker inspect -f '{{.Image}}' adbsync 2>/dev/null || true)"
+n=0
+for t in $(docker image ls adbsync-server --format '{{.Tag}}'); do
+  case "$protected" in *" $t "*) continue ;; esac
+  [ "$(docker image inspect -f '{{.Id}}' "adbsync-server:$t")" = "$running" ] && continue
+  n=$((n + 1))
+  [ "$n" -le 2 ] && continue
+  docker rmi "adbsync-server:$t" >/dev/null || true
+done
+docker image prune -f >/dev/null
+docker builder prune -f >/dev/null
+PRUNE
+
 if [ "$RECREATE" = 1 ]; then
   echo "== recreate container"
   ssh "$HOST" 'cd ~/adbsync && docker compose up -d --no-build --force-recreate'

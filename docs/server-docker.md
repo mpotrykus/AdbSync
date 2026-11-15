@@ -72,6 +72,8 @@ tools/deploy-pi.sh --recreate        # build the image on the Pi, then recreate 
 
 The Pi needs an `adbsync-server:base` image once. After a full build (`docker build -t adbsync-server:latest .`), run `docker tag adbsync-server:latest adbsync-server:base`. Repeat that only when the base changes: a new adb or .NET runtime.
 
+Every deploy adds an `adbsync-server:<commit>` tag. After building, `deploy-pi.sh` deletes all of them except the two newest and the one the running container uses, and keeps `latest`, `base`, `base-noaapt` and `rollback-theme-only`. It then runs `docker image prune -f` and `docker builder prune -f` on the Pi.
+
 Recreating the container interrupts any run in progress, so check the logs first. The adb key and everything else in `/data` survive it.
 
 ## Backing up the data folder
