@@ -34,7 +34,7 @@
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="AdbSync Companion"
+        android:label="AdbSync"
         android:theme="@android:style/Theme.DeviceDefault">
 
         <activity
