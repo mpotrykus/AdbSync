@@ -96,22 +96,20 @@ body.glass .mud-appbar::after {
 }
 
 .brand-mark {
-    width: 16px;
-    height: 16px;
-    border-radius: 5px;
-    background: linear-gradient(135deg, #7c5cff, #38bdf8);
-    box-shadow: 0 0 14px rgba(124, 92, 255, 0.8);
-    transform: rotate(45deg);
+    width: 22px;
+    height: 22px;
+    background: url("../img/logo.png") center / contain no-repeat;
+    filter: drop-shadow(0 0 6px rgba(60, 90, 255, 0.7));
     animation: mark-pulse 3.2s ease-in-out infinite;
 }
 
 @keyframes mark-pulse {
     0%,
     100% {
-        box-shadow: 0 0 10px rgba(124, 92, 255, 0.6);
+        filter: drop-shadow(0 0 4px rgba(60, 90, 255, 0.6));
     }
     50% {
-        box-shadow: 0 0 22px rgba(56, 189, 248, 0.9);
+        filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.9));
     }
 }
 
