@@ -72,7 +72,7 @@ Stage B, the server:
 9. `AdbSync.Server` skeleton with `/info` and `/health`, then the Dockerfile and compose file, verified early on the arm64 target.
 10. Auth and pairing: certificate with mode 0600, hashed per-client tokens, pairing codes, `adbsync-server pair`. Required before listening beyond localhost.
 11. Event bus: `seq`, replay buffer, `/status` and `/events`.
-12. API slices: jobs and runs, devices, conflicts with ImageSharp thumbnails, settings/scheduler/preferences, long-running operations, folder browsing, job rename and delete.
+12. API slices: jobs and runs, devices, conflicts with thumbnails, settings/scheduler/preferences, long-running operations, folder browsing, job rename and delete.
 13. Data migration from the PC: export with Windows path remap, import on the server, dry run against real data.
 
 The installed WPF exe is only updated from this branch at checkpoints the user chooses.
@@ -97,10 +97,10 @@ Stage B notes (done 2026-11-11, steps 8-12):
 
 - **What was built.**
   - Step 8: `AdbSync.Engine` (net8.0) holds `JobRunService`, the scheduler, change watchers, `AppGateService`, the companion broadcast and `AppConfigService`. Windows sleep/wake/logoff hooks sit behind `IHostPowerEvents`. The WPF app keeps its legacy `/api/*` companion server, tray, autostart and thumbnails.
-  - Step 9: `AdbSync.Server` (`adbsync-server`) with `AddAdbSyncEngine` shared by both hosts, and a Dockerfile on Ubuntu 24.04 (`aspnet:8.0-noble`) with apt's arm64 adb 34.0.4, because Google's platform-tools zip is x86-64 only. Also `compose.yaml` (host networking, PUID/PGID, `/data` volume, `/projects` bind mount with rslave) and `docs/server-docker.md`. adb keys live in `/data` (`ANDROID_USER_HOME`). SIGTERM cancels runs at the next file boundary. The image was built natively on the Pi (369 MB), reported healthy and wrote files as uid 1000.
+  - Step 9: `AdbSync.Server` (`adbsync-server`) with `AddAdbSyncEngine` shared by both hosts, and a Dockerfile on Ubuntu 24.04 (`aspnet:8.0-noble`) with apt's arm64 adb 34.0.4, because Google's platform-tools zip is x86-64 only. Also `compose.yaml` (host networking, PUID/PGID, `/data` volume, `/projects` bind mount with rslave) and `docs/server-docker.md`. adb keys live in `/data/adb-home/.android`: Debian's adb only honours `$HOME/.android`, so the server sets `HOME=/data/adb-home` on Linux (`ANDROID_USER_HOME` is ignored). SIGTERM cancels runs at the next file boundary. The image was built natively on the Pi (369 MB), reported healthy and wrote files as uid 1000.
   - Step 10: HTTPS only, with the self-signed certificate (0600, pinned by fingerprint) or PEM files. Per-client tokens and one-time pairing codes are stored as SHA-256 hashes (migration 4). `/auth/pair` is limited to 5 requests a minute per address. `adbsync-server pair` runs next to the server without taking its lock.
   - Step 11: `EventBus` with a 2,000-event / 15-minute replay buffer. `seq` starts at the server's start time in Unix ms, so a stale `Last-Event-ID` after a restart always gets `resync`. Also `/events` (SSE), `/status` and `/scheduler`, and `client.revoked` closes the client's streams.
-  - Step 12: every contract operation, in six slices: jobs and runs, devices, conflicts with ImageSharp thumbnails, settings/preferences/projects-directory move/operations/server-fs browse, snapshots/app actions/watch/manifests/effective settings, and the remaining run events. Each slice was checked end to end on Linux (WSL) with smoke scripts.
+  - Step 12: every contract operation, in six slices: jobs and runs, devices, conflicts with thumbnails, settings/preferences/projects-directory move/operations/server-fs browse, snapshots/app actions/watch/manifests/effective settings, and the remaining run events. Each slice was checked end to end on Linux (WSL) with smoke scripts.
 - **Deviations from the contract or the order.**
   - **A device can only be renamed while no job uses it.** Sync state is keyed by device name (see Stage A notes), and a rename across all of it isn't implemented. A device a job uses gets `device_in_use`.
   - **Job rename rewrites run history.** Old runs show the new job name, so the history stays attached to the job (`JobStateRenamer` moves the folder, the name-keyed state and the history rows together, and undoes the move if the config save fails).
@@ -111,17 +111,27 @@ Stage B notes (done 2026-11-11, steps 8-12):
 - **Known gaps.**
   - No real adb in WSL, so device calls (test, pair, browse, packages, and runs against phones) were only checked failing cleanly. The first real phone run against the server happens in step 13 / Phase 3.
   - On the Pi only the step 9 image was run. Steps 10-12 were tested on WSL x64, not in the arm64 container.
-  - The companion app still speaks the legacy API (Phase 3). The web UI doesn't exist yet (Phase 4).
+  - At the time, the companion app still spoke the legacy API and the web UI didn't exist yet. Both are done: see Phases 3 and 4 and Stage C.
   - None of Stage A or B is in the installed WPF exe.
   - Pausing the scheduler only stops timed runs, as in the WPF app. On-change watchers still start runs once a device is reachable. `pausedAt` isn't stored and is always `null`.
 
 Step 13 notes (2026-11-11, data migration rehearsal):
 
 - **No import tool needed.** The engine imports the legacy JSON on its first database open, so migrating means copying the PC data folder with a few changes. Only `projectsDirectory` holds a Windows path; job folder overrides would too, but none are set. Manifests, run file lists, pending conflicts and push-safety records hold relative paths only. Old run logs keep their Windows paths as history.
-- **Changes made to the copy:** `projectsDirectory` → `/projects`; `timeZone` set to the PC's zone (`America/Chicago`), since the Pi runs on Europe/London; cached phone ports cleared; `companionBroadcastsEnabled` off until Phase 3, because the broadcast service pushes a server URL to the companion app over adb and would point it away from the PC. Dropped: the legacy companion server token and port, `startAtLogin`, the PC certificate, WPF logs and sort state, a leftover legacy `.sync_checkpoint.json`, and a temp file from an interrupted save.
+- **Changes made to the copy:** `projectsDirectory` → `/projects`; `timeZone` set to the PC's zone (`America/Chicago`), since the Pi runs on Europe/London; cached phone ports cleared; `companionBroadcastsEnabled` off until Phase 3 (turned back on afterwards, see Stage C), because the broadcast service pushes a server URL to the companion app over adb and would point it away from the PC. Dropped: the legacy companion server token and port, `startAtLogin`, the PC certificate, WPF logs and sort state, a leftover legacy `.sync_checkpoint.json`, and a temp file from an interrupted save.
 - **Pre-imported with the scheduler paused.** The copy is imported once off the Pi, the scheduler paused through the API and the temporary client revoked, so the server starts paused and with no clients, certificate or adb keys from elsewhere.
 - **Project folders** go to `/mnt/usb2/AdbSync Projects` with rsync (from WSL, through Windows' `ssh.exe`), keeping modification times and skipping `.sync_staging`. Times must survive within the merge's 2 s tolerance, or every master file looks changed and the first run pushes everything to the phones. Checked by comparing size and time of every file.
 - **The phones are the gate.** The server's adb key is new and wireless debugging rejects unpaired keys, so until a phone is paired with the server, the server can't read or write it, whatever the scheduler or watchers do.
+
+Stage C notes (2026-11-11 onwards, after the cut-over):
+
+- **Live system.** `adbsync` runs in Docker on the Pi (`raspi-server`, `~/adbsync`, `https://192.168.0.224:47615`), masters on `/mnt/usb2/AdbSync Projects`, data in `~/adbsync/data`. Deploy with `bash tools/deploy-pi.sh --recreate` (local arm64 publish on top of the `adbsync-server:base` image, about 3 minutes, old images pruned afterwards); check that no run is in progress first. A nightly data backup runs at 04:15 to `/mnt/usb4/adbsync-backups` (`tools/pi/backup-data.sh`, restore steps in `docs/server-docker.md`).
+- **Thumbnails use SkiaSharp**, not ImageSharp. ImageSharp 3.1.x has unfixed advisories, and 3.2+ enforces a license key at Release build, which breaks the Docker publish.
+- **Phone progress notifications** are back: the server registers `CompanionBroadcastService` and sends `am broadcast` to devices adb already has online. Only runs trigger it, because the server connects phones on demand.
+- **Features added after the cut-over:** incremental pull (off by default, `docs/incremental-pull.md`), app launcher icons for jobs, a frosted-glass web theme with a mobile layout, run charts and job filter, rollback points copied as their own run step (skipped when the merge changes nothing), serialised adb server starts, and a dev server with simulated devices (`docs/dev-server.md`).
+- **Companion app:** restyled to match the web UI, with a Web UI button that signs in with a one-time code, tabs and job editor parity, snapshots, and run details and execution graph like the web UI.
+- **Not yet verified on a device:** the Tab S9 is not paired with the server and has no new app, so runs for jobs that include it fail at PreConnect with no data change. Also untested on a phone: Run now / Stop, close-and-sync, the wireless-debugging pairing notification, a snapshot restore from the web UI, and thumbnail rendering on the Pi (SkiaSharp arm64).
+- **Open product decision:** an opt-in "continue when a phone is unreachable".
 
 Cut-over runbook (Phase 5, after the companion app speaks v1 and the web UI MVP exists):
 
@@ -134,11 +144,15 @@ Cut-over runbook (Phase 5, after the companion app speaks v1 and the web UI MVP 
 
 ### Phase 3: Companion app targets the server
 
+Status: **done.** The app speaks `/api/v1` (pairing link or code, SSE, ids behind a name directory), and the conflict picker, run history, execution graph and job sort order all follow the server. Verified on the S23+. See Stage C for the later restyle and web UI parity work.
+
 - Point the phone at the server API. This is the first phase that delivers the user's goal (sync with the PC off).
 - Auth/pairing flow, behaviour on flaky mobile networks, background execution within Android's limits.
 - Preserve existing companion features: conflict picker, job sort order following the PC sort, run history graph.
 
 ### Phase 4: Web UI
+
+Status: **done.** Every item below is built and deployed; slice notes follow for the record.
 
 - Consumes the same API, served by the server.
 - MVP before the cut-over: status, run and stop, run history with logs and steps, conflicts, and job, device and settings editing.
@@ -150,11 +164,13 @@ Slice 1 (2026-11-11), pulled ahead of Phase 3 so the cut-over could be finished 
 - Sign-in with a pairing code, token in localStorage, sign out revokes the token, "pair another client" shows a code.
 - Jobs: state, enable switch, last run, availability, conflicts, checkpoint; run, dry run, stop. The run dialog follows a live run (steps, files, log).
 - Devices: test connection, and pairing with the phone's wireless-debugging code (the pairing port is found over mDNS).
-- Scheduler pause and dark mode in the app bar. Status is polled; SSE is a later slice.
+- Scheduler pause and dark mode in the app bar. Status was polled at this point; SSE came in a later slice.
 - Gotcha: the server's reference to `AdbSync.Web` uses `GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained"`, otherwise `publish -a arm64` makes the UI build for linux-arm64 and fails with WASM0005.
-- Still missing for the MVP: run history list, conflicts, and job/device/settings editing.
+- At this point still missing for the MVP: run history list, conflicts, and job/device/settings editing. All were added the same day, along with SSE, the execution graph, snapshots and rollback, the device folder and package pickers, job sort, advanced job overrides and the projects-directory move.
 
 ### Phase 5: Cut-over
+
+Status: **done 2026-11-11.** The server on the Pi is the live system and the WPF app on the PC is off. Remaining sign-off: pair the Tab S9 and run the device checks listed under Stage C.
 
 - Import the PC's data on the server, pair the companion apps against v1, and stop the WPF app's engine on the PC.
 - The previous plan's "PC agent and WPF as API client" phase is dropped (decided 2026-11-11). Converting the WPF code-behind into an API client would be roughly a rewrite and duplicate the web UI.
@@ -167,12 +183,13 @@ Decided 2026-11-11: the WPF app is kept as an option, not as a client of the ser
 - `AdbSync.App` stays in the repo and runs the engine in-process through `AdbSync.Engine`, so it gets every Core fix.
 - **No new features.** It only has to keep building and working on the current Core. New UI work goes to the web UI.
 - If keeping it working ever needs more than small adaptations, it is dropped back to the `wpf-v1` tag.
-- Open: the companion app talks to the v1 API after the cut-over. Preferably the v1 endpoints live in `AdbSync.Engine` so the desktop edition serves them too; check this when the engine library is extracted.
+- Resolved: the v1 endpoints live in `AdbSync.Server`, not `AdbSync.Engine`, so the desktop edition doesn't serve v1. The companion app only speaks v1, so it can't talk to a standalone WPF install. See the WPF to-do below.
 
 ## To-do
 
-- **Rename the GitHub repo** from `adb-sync-wpf` (for example to `adb-sync`). The repo is kept rather than replaced, because Core, the tests, the Android app, history and PR #4 all carry over. GitHub redirects the old URL; update local remotes afterwards. Nothing in the repo refers to the old name.
-- Decide whether `AdbSync.Cli` stays as a separate tool or folds into `adbsync-server`.
+- **WPF desktop edition (TODO, deliberately left for later).** Not updated for this branch. It builds and CI passes, but nobody has run it since Stage A and the installed exe is still the pre-branch build. Known gaps: it still serves the legacy `/api/*` companion server, so the current companion app can't connect to it; it has none of the web UI features; and it shares the `adbsync.db` format, so `wpf-v1` can't read data written by this branch. Decide whether to host v1 from the WPF process, drop its phone features, or retire it to `wpf-v1`.
+- **`AdbSync.Cli` (TODO).** Still references only `AdbSync.Core` and not `AdbSync.Engine`. Decide whether it stays a separate tool or folds into `adbsync-server`.
+- **Rename the GitHub repo** from `adb-sync-wpf` (for example to `adb-sync`) once this branch is merged. The repo is kept rather than replaced, because Core, the tests, the Android app, history and PR #4 all carry over. GitHub redirects the old URL; update local remotes afterwards. Nothing in the repo refers to the old name.
 
 ## Open decisions for the user
 
