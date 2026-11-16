@@ -50,16 +50,22 @@
             </aapt:attr>
         </path>
     </group>
-    <path android:pathData="M54,29L77,52Q54,44 31,52Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="54"
-                android:startY="29"
-                android:endX="54"
-                android:endY="52"
-                android:startColor="#8CFFFFFF"
-                android:endColor="#00FFFFFF" />
-        </aapt:attr>
-    </path>
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="45">
+        <clip-path android:pathData="M47.2,37h13.6a10.2,10.2 0 0 1 10.2,10.2v13.6a10.2,10.2 0 0 1 -10.2,10.2h-13.6a10.2,10.2 0 0 1 -10.2,-10.2v-13.6a10.2,10.2 0 0 1 10.2,-10.2z" />
+        <path android:pathData="M31,31L77,31Q46,46 31,77Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="31"
+                    android:startY="31"
+                    android:endX="48"
+                    android:endY="48"
+                    android:startColor="#8CFFFFFF"
+                    android:endColor="#00FFFFFF" />
+            </aapt:attr>
+        </path>
+    </group>
 </vector>
