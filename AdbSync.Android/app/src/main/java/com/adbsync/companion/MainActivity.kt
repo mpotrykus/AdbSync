@@ -103,6 +103,9 @@ class MainActivity : Activity() {
     private lateinit var browserCard: LinearLayout
 
     private val jobs = linkedMapOf<String, RemoteJob>()
+    private var sortKey = "order"
+    private var sortDescending = false
+    private var jobOrders = emptyMap<String, Int>()
     private var feedActive: AtomicBoolean? = null
     @Volatile private var feedConn: HttpURLConnection? = null
     private var resumed = false
@@ -113,6 +116,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sortKey = uiPrefs().getString(PREF_SORT_KEY, "order") ?: "order"
+        sortDescending = uiPrefs().getBoolean(PREF_SORT_DESC, false)
         actionBar?.hide()
         window.setBackgroundDrawable(Ui.windowBackground(this))
         window.isNavigationBarContrastEnforced = false
@@ -413,6 +418,7 @@ class MainActivity : Activity() {
                 setPcStatus("Connected to $pc", Ui.SUCCESS)
                 renderJobs()
                 loadMeta()
+                loadJobOrders()
             }
             override fun onJob(job: RemoteJob) = ui {
                 if (!active.get()) return@ui
@@ -519,10 +525,10 @@ class MainActivity : Activity() {
         }
         val columns = ((resources.configuration.screenWidthDp - 32) / MIN_CARD_WIDTH_DP).coerceAtLeast(1)
         if (columns == 1) {
-            for (job in jobs.values) jobsContainer.addView(jobCard(job))
+            for (job in sortedJobs()) jobsContainer.addView(jobCard(job))
             return
         }
-        for (rowJobs in jobs.values.chunked(columns)) {
+        for (rowJobs in sortedJobs().chunked(columns)) {
             jobsContainer.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 isBaselineAligned = false
@@ -535,6 +541,43 @@ class MainActivity : Activity() {
                 }
             })
         }
+    }
+
+    private fun sortedJobs(): List<RemoteJob> {
+        val comparator: Comparator<RemoteJob> = when (sortKey) {
+            "name" -> compareBy { it.name.lowercase() }
+            "lastRun" -> compareBy { it.lastResultAt?.toInstant() ?: java.time.Instant.MIN }
+            "nextRun" -> compareBy { it.nextRunAt?.toInstant() ?: java.time.Instant.MAX }
+            "status" -> compareBy { it.lastStatus ?: "" }
+            else -> compareBy { jobOrders[it.name] ?: Int.MAX_VALUE }
+        }
+        return jobs.values.sortedWith((if (sortDescending) comparator.reversed() else comparator).thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+    }
+
+    private fun loadJobOrders() {
+        if (sortKey != "order") return
+        async({ it.jobOrders() }) { result ->
+            result.onSuccess {
+                jobOrders = it
+                renderJobs()
+            }
+        }
+    }
+
+    private fun showSortMenu(anchor: View) {
+        val menu = PopupMenu(this, anchor)
+        SORT_OPTIONS.forEachIndexed { i, (key, label) ->
+            val item = menu.menu.add(0, i, i, if (key == sortKey) "$label  ${if (sortDescending) "↓" else "↑"}" else label)
+            item.isChecked = key == sortKey
+        }
+        menu.setOnMenuItemClickListener { item ->
+            val key = SORT_OPTIONS[item.itemId].first
+            if (key == sortKey) sortDescending = !sortDescending else sortKey = key
+            uiPrefs().edit().putString(PREF_SORT_KEY, sortKey).putBoolean(PREF_SORT_DESC, sortDescending).apply()
+            if (sortKey == "order" && jobOrders.isEmpty()) loadJobOrders() else renderJobs()
+            true
+        }
+        menu.show()
     }
 
     private fun renderStats() {
@@ -831,6 +874,7 @@ class MainActivity : Activity() {
                 }
             })
         }
+        jobsToolbar.addView(iconButton(R.drawable.ic_sort, "Sort") { showSortMenu(it) })
         jobsToolbar.addView(iconButton(R.drawable.ic_playlist_play, "Run all") {
             Dialogs.confirm(this, "Run every job?", "Starts every enabled job now.", "Run all") {
                 async({ it.runAll() }) { result ->
@@ -1181,8 +1225,11 @@ class MainActivity : Activity() {
 
     private companion object {
         const val MIN_CARD_WIDTH_DP = 340
+        val SORT_OPTIONS = listOf("order" to "Order", "name" to "Name", "lastRun" to "Last run", "nextRun" to "Next run", "status" to "Status")
         const val STATE_TAB = "tab"
         const val PREF_BROWSER = "browser"
+        const val PREF_SORT_KEY = "sortKey"
+        const val PREF_SORT_DESC = "sortDescending"
         const val REQUEST_NOTIFICATIONS = 1
         const val MENU_DRY_RUN = 1
         const val MENU_DISCARD = 2

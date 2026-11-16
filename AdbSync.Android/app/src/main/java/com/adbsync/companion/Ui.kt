@@ -408,7 +408,7 @@ object Ui {
     fun Context.phaseGraph(steps: List<Triple<Int, String, StepState>>) = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_HORIZONTAL
-        setPadding(0, dp(14), 0, dp(4))
+        setPadding(0, dp(30), 0, dp(16))
         steps.forEachIndexed { i, (icon, label, state) ->
             val (stroke, fill, tint) = when (state) {
                 StepState.Done -> Triple(SUCCESS, 0x1F5BD98A, SUCCESS)
@@ -416,6 +416,7 @@ object Ui {
                 StepState.Pending -> Triple(0x29FFFFFF, 0x08FFFFFF, 0xFF6F6A86.toInt())
             }
             addView(LinearLayout(context).apply {
+                contentDescription = label
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(FrameLayout(context).apply {
@@ -429,13 +430,6 @@ object Ui {
                         imageTintList = ColorStateList.valueOf(tint)
                     }, FrameLayout.LayoutParams(dp(17), dp(17), Gravity.CENTER))
                 }, LinearLayout.LayoutParams(dp(34), dp(34)))
-                addView(TextView(context).apply {
-                    text = label
-                    textSize = 10f
-                    typeface = plex(500)
-                    setTextColor(if (state == StepState.Pending) TEXT_SECONDARY else TEXT_PRIMARY)
-                    setPadding(0, dp(3), 0, 0)
-                })
             })
             if (i < steps.size - 1) {
                 addView(View(context).apply {
@@ -444,7 +438,7 @@ object Ui {
                         StepState.Active -> GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(ACCENT_FROM, 0x1FFFFFFF))
                         StepState.Pending -> rounded(0x1FFFFFFF, dp(2))
                     }
-                }, LinearLayout.LayoutParams(dp(40), dp(2)).apply { topMargin = dp(16) })
+                }, LinearLayout.LayoutParams(dp(30), dp(2)).apply { topMargin = dp(16) })
             }
         }
     }

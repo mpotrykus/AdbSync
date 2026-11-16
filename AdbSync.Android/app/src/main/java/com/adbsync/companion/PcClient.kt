@@ -214,7 +214,9 @@ internal fun String.capitalized() = replaceFirstChar { it.uppercaseChar() }
 class HttpStatusException(val code: Int) : Exception("HTTP $code")
 
 /** Job and device ids by name and back. The app works with names; the v1 API works with ids. */
-internal class Directory(val jobIds: Map<String, String>, val deviceIds: Map<String, String>, val fetchedAt: Long) {
+internal class Directory(
+    val jobIds: Map<String, String>, val deviceIds: Map<String, String>, val fetchedAt: Long, val jobOrders: Map<String, Int> = emptyMap(),
+) {
     val jobNames = jobIds.entries.associate { (name, id) -> id to name }
     val deviceNames = deviceIds.entries.associate { (name, id) -> id to name }
 }
@@ -234,6 +236,8 @@ class PcClient(private val config: PcConfig) {
 
     fun setEnabled(job: String, enabled: Boolean): Int =
         send("PATCH", "/api/v1/jobs/${jobId(job)}", JSONObject().put("enabled", enabled), "application/merge-patch+json").first
+
+    fun jobOrders(): Map<String, Int> = directory(refresh = true).jobOrders
 
     fun status(): List<RemoteJob> = parseStatus(getText("/api/v1/status", connectTimeoutMs = 2_500, readTimeoutMs = 4_000))
 
@@ -439,6 +443,7 @@ class PcClient(private val config: PcConfig) {
             (0 until jobs.length()).associate { jobs.getJSONObject(it).let { j -> j.getString("name") to j.getString("id") } },
             (0 until devices.length()).associate { devices.getJSONObject(it).let { d -> d.getString("name") to d.getString("id") } },
             System.currentTimeMillis(),
+            (0 until jobs.length()).associate { jobs.getJSONObject(it).let { j -> j.getString("name") to j.optInt("order", Int.MAX_VALUE) } },
         )
         synchronized(directories) { directories[config.url] = fresh }
         return fresh
