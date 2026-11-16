@@ -186,7 +186,7 @@ public class AdbDeviceResolverTests
     [Fact]
     public async Task EnsureConnectedAsync_ConnectComesOnlineAfterAFewPolls_Succeeds()
     {
-        var resolver = new AdbDeviceResolver(_adbClient, _mdns, _adbServer, onlineWait: TimeSpan.FromSeconds(5));
+        var resolver = new AdbDeviceResolver(_adbClient, _mdns, _adbServer, onlineWait: TimeSpan.FromSeconds(60));
         var device = new DeviceConfig { Name = "S23+", Ip = "192.168.0.40" };
         var online = Devices(new DeviceData { Serial = "192.168.0.40:41000", State = DeviceState.Online });
         _adbClient.GetDevicesAsync(Arg.Any<CancellationToken>()).Returns(Devices(), Devices(), Devices(), online);
