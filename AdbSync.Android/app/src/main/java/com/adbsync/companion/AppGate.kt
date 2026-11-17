@@ -159,10 +159,9 @@ class AppGateService : AccessibilityService() {
             addView(content.apply {
                 background = Ui.rounded(Ui.SURFACE_ALT, dp(12))
                 setPadding(dp(20), dp(18), dp(20), dp(18))
-            }, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.CENTER).apply {
-                marginStart = dp(20)
-                marginEnd = dp(20)
-            })
+            }, FrameLayout.LayoutParams(
+                minOf(resources.displayMetrics.widthPixels - dp(40), dp(PANEL_MAX_WIDTH_DP)), WRAP_CONTENT, Gravity.CENTER,
+            ))
         }
         private val label = appLabel(pkg)
         private var shown = false
@@ -335,5 +334,6 @@ class AppGateService : AccessibilityService() {
         const val TAG = "AdbSyncGate"
         const val WATCH_CACHE_MS = 60_000L
         const val SYNC_POLL_MS = 3_000L
+        const val PANEL_MAX_WIDTH_DP = 420
     }
 }
