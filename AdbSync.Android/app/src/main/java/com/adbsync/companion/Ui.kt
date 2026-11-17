@@ -263,33 +263,9 @@ object Ui {
 
     /** The web's brand mark: a glowing gradient diamond, swapped for the orbiting sync mark while something syncs. */
     class BrandMark(context: Context) : FrameLayout(context) {
-        private val diamond = object : View(context) {
-            private val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF7C5CFF.toInt()
-                alpha = 0xB0
-                maskFilter = android.graphics.BlurMaskFilter(context.dp(5).toFloat(), android.graphics.BlurMaskFilter.Blur.NORMAL)
-            }
-            private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-
-            init {
-                setLayerType(LAYER_TYPE_SOFTWARE, null)
-            }
-
-            override fun onDraw(canvas: Canvas) {
-                val cx = width / 2f
-                val cy = height / 2f
-                val half = context.dp(8).toFloat()
-                val radius = context.dp(5).toFloat()
-                val rect = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
-                canvas.save()
-                canvas.rotate(45f, cx, cy)
-                canvas.drawRoundRect(rect, radius, radius, glow)
-                fill.shader = android.graphics.LinearGradient(
-                    rect.left, rect.top, rect.right, rect.bottom, 0xFF7C5CFF.toInt(), 0xFF38BDF8.toInt(), Shader.TileMode.CLAMP,
-                )
-                canvas.drawRoundRect(rect, radius, radius, fill)
-                canvas.restore()
-            }
+        private val diamond = android.widget.ImageView(context).apply {
+            setImageResource(R.drawable.brand_logo)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
         }
         private val mark = SyncMarkDrawable()
         private val sync = View(context).apply {
